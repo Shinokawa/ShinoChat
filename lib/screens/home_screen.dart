@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -461,60 +462,102 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return null;
   }
 
-  Future<void> _pickAttachments() async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
-    if (result == null) return;
-    final next = result.files
-        .map(
-          (file) => _PendingAttachment(
-            label: file.name,
-            path: file.path ?? file.name,
-            kind: _AttachmentKind.file,
-          ),
-        )
-        .toList();
+  void _showPickerError({
+    required Object error,
+    required String zhAction,
+    required String enAction,
+  }) {
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+    final normalized = raw.toLowerCase();
+    final likelyPermissionIssue =
+        error is PlatformException ||
+        normalized.contains('permission') ||
+        normalized.contains('denied') ||
+        normalized.contains('not authorized') ||
+        normalized.contains('access');
+    final fallback = appText(
+      context,
+      zh: '$zhAction失败，请到系统设置中开启相机、照片与文件权限后重试。',
+      en:
+          '$enAction failed. Please enable camera, photos, and files permissions in system settings and try again.',
+    );
     if (!mounted) return;
-    setState(() => _pendingAttachments = [..._pendingAttachments, ...next]);
+    setState(() {
+      _error = raw.isEmpty || likelyPermissionIssue ? fallback : raw;
+    });
+  }
+
+  Future<void> _pickAttachments() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+      if (result == null) return;
+      final next = result.files
+          .map(
+            (file) => _PendingAttachment(
+              label: file.name,
+              path: file.path ?? file.name,
+              kind: _AttachmentKind.file,
+            ),
+          )
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _error = null;
+        _pendingAttachments = [..._pendingAttachments, ...next];
+      });
+    } catch (error) {
+      _showPickerError(error: error, zhAction: '选择文件', enAction: 'File pick');
+    }
   }
 
   Future<void> _pickImage() async {
-    final image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 35,
-      maxWidth: 1024,
-      maxHeight: 1024,
-    );
-    if (image == null || !mounted) return;
-    setState(() {
-      _pendingAttachments = [
-        ..._pendingAttachments,
-        _PendingAttachment(
-          label: image.name,
-          path: image.path,
-          kind: _AttachmentKind.image,
-        ),
-      ];
-    });
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 35,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (image == null || !mounted) return;
+      setState(() {
+        _error = null;
+        _pendingAttachments = [
+          ..._pendingAttachments,
+          _PendingAttachment(
+            label: image.name,
+            path: image.path,
+            kind: _AttachmentKind.image,
+          ),
+        ];
+      });
+    } catch (error) {
+      _showPickerError(error: error, zhAction: '选择图片', enAction: 'Image pick');
+    }
   }
 
   Future<void> _captureImage() async {
-    final image = await _imagePicker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 35,
-      maxWidth: 1024,
-      maxHeight: 1024,
-    );
-    if (image == null || !mounted) return;
-    setState(() {
-      _pendingAttachments = [
-        ..._pendingAttachments,
-        _PendingAttachment(
-          label: image.name,
-          path: image.path,
-          kind: _AttachmentKind.camera,
-        ),
-      ];
-    });
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 35,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (image == null || !mounted) return;
+      setState(() {
+        _error = null;
+        _pendingAttachments = [
+          ..._pendingAttachments,
+          _PendingAttachment(
+            label: image.name,
+            path: image.path,
+            kind: _AttachmentKind.camera,
+          ),
+        ];
+      });
+    } catch (error) {
+      _showPickerError(error: error, zhAction: '调用相机', enAction: 'Camera');
+    }
   }
 
   Future<void> _scrollToBottom() async {
