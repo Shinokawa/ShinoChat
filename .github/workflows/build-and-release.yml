@@ -55,16 +55,11 @@ jobs:
       ALIAS: ${{ secrets.ALIAS }}
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-#  Build-iOS:
-#    name: Build iOS
-#    uses: ./.github/workflows/build-ios.yml
-
   Publish:
     name: Publish GitHub Release
     needs:
       - Gatekeeper
       - Build-Android
-#      - Build-iOS
     if: needs.Gatekeeper.outputs.triggered == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -93,7 +88,6 @@ jobs:
             echo
             echo "### Included artifacts"
             echo "- Android APK"
-#            echo "- iOS unsigned IPA"
             echo
             echo "### Recent commits"
             git log -n 20 --pretty='- %s (%h)'
@@ -108,5 +102,5 @@ jobs:
           allowUpdates: true
           replacesArtifacts: true
           artifactErrorsFailBuild: true
-          artifacts: /tmp/artifacts/release-android/*.apk #,/tmp/artifacts/release-ios/*.ipa
+          artifacts: /tmp/artifacts/release-android/*.apk
           token: ${{ secrets.GITHUB_TOKEN }}
