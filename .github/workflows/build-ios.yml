@@ -1,15 +1,16 @@
 name: Build iOS
 
-on:
-  workflow_call:
-    outputs:
-      version:
-        description: App version name
-        value: ${{ jobs.build.outputs.version }}
-      artifact-name:
-        description: Artifact name
-        value: ${{ jobs.build.outputs.artifact-name }}
-  workflow_dispatch:
+# on:
+#   workflow_call:
+#     outputs:
+#       version:
+#         description: App version name
+#         value: ${{ jobs.build.outputs.version }}
+#       artifact-name:
+#         description: Artifact name
+#         value: ${{ jobs.build.outputs.artifact-name }}
+#   workflow_dispatch:
+
 
 permissions:
   contents: read
