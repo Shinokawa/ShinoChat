@@ -1,7 +1,7 @@
 name: flutter_app
 description: "Flutter client for Shinokawa Chat with streaming, sync, and attachments."
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.0.2+3
 
 environment:
   sdk: ^3.10.4

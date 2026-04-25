@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
@@ -718,25 +719,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    return Scaffold(
-      key: _scaffoldKey,
-      drawer: _buildHistoryDrawer(theme),
-      backgroundColor: isDark
-          ? const Color(0xFF111111)
-          : const Color(0xFFFFF3F7),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(theme),
-            if (_error != null) _buildErrorBanner(theme),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: _buildChatPane(theme),
+    final backgroundColor = isDark
+        ? const Color(0xFF111111)
+        : const Color(0xFFFFF3F7);
+    final overlayStyle = SystemUiOverlayStyle(
+      statusBarColor: backgroundColor,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: backgroundColor,
+      systemNavigationBarIconBrightness: isDark
+          ? Brightness.light
+          : Brightness.dark,
+      systemStatusBarContrastEnforced: false,
+      systemNavigationBarContrastEnforced: false,
+    );
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: Scaffold(
+        key: _scaffoldKey,
+        drawer: _buildHistoryDrawer(theme),
+        backgroundColor: backgroundColor,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildTopBar(theme),
+              if (_error != null) _buildErrorBanner(theme),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: _buildChatPane(theme),
+                ),
               ),
-            ),
-            _buildComposer(theme),
-          ],
+              _buildComposer(theme),
+            ],
+          ),
         ),
       ),
     );
@@ -1139,78 +1156,110 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 150),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: ActionChip(
-                      label: Text(
-                        _resolveModelAlias() ??
-                            appText(context, zh: '模型', en: 'Model'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const composerIconSize = 32.0;
+                const sendButtonSize = 42.0;
+                const actionGap = 4.0;
+                const modelToActionsGap = 8.0;
+                const sendToActionsGap = 8.0;
+                final trailingWidth =
+                    (composerIconSize * 3) +
+                    (actionGap * 2) +
+                    sendToActionsGap +
+                    sendButtonSize;
+                final modelMaxWidth = math.max(
+                  64.0,
+                  constraints.maxWidth - trailingWidth - modelToActionsGap,
+                );
+
+                final modelChip = ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: modelMaxWidth),
+                  child: ActionChip(
+                    label: Text(
+                      _resolveModelAlias() ??
+                          appText(context, zh: '模型', en: 'Model'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    avatar: const Icon(Icons.auto_awesome_outlined, size: 16),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    onPressed: _pickModel,
+                  ),
+                );
+
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: modelChip,
                       ),
-                      avatar: const Icon(Icons.auto_awesome_outlined, size: 18),
-                      onPressed: _pickModel,
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                IconButton(
-                  onPressed: _pickAttachments,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 36,
-                    height: 36,
-                  ),
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.attach_file_rounded),
-                ),
-                IconButton(
-                  onPressed: _pickImage,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 36,
-                    height: 36,
-                  ),
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.image_outlined),
-                ),
-                IconButton(
-                  onPressed: _captureImage,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 36,
-                    height: 36,
-                  ),
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.photo_camera_outlined),
-                ),
-                const SizedBox(width: 12),
-                FilledButton(
-                  onPressed: _busy ? null : _sendMessage,
-                  style: FilledButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(46, 46),
-                    fixedSize: const Size(46, 46),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                    const SizedBox(width: modelToActionsGap),
+                    _buildComposerIconButton(
+                      onPressed: _pickAttachments,
+                      icon: Icons.attach_file_rounded,
+                      size: composerIconSize,
                     ),
-                  ),
-                  child: Icon(
-                    _busy
-                        ? Icons.hourglass_top_rounded
-                        : Icons.arrow_upward_rounded,
-                  ),
-                ),
-              ],
+                    const SizedBox(width: actionGap),
+                    _buildComposerIconButton(
+                      onPressed: _pickImage,
+                      icon: Icons.image_outlined,
+                      size: composerIconSize,
+                    ),
+                    const SizedBox(width: actionGap),
+                    _buildComposerIconButton(
+                      onPressed: _captureImage,
+                      icon: Icons.photo_camera_outlined,
+                      size: composerIconSize,
+                    ),
+                    const SizedBox(width: sendToActionsGap),
+                    _buildSendButton(size: sendButtonSize),
+                  ],
+                );
+              },
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildComposerIconButton({
+    required VoidCallback onPressed,
+    required IconData icon,
+    double size = 36,
+  }) {
+    return IconButton(
+      onPressed: onPressed,
+      constraints: BoxConstraints.tightFor(width: size, height: size),
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      iconSize: size * 0.58,
+      style: IconButton.styleFrom(
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      icon: Icon(icon),
+    );
+  }
+
+  Widget _buildSendButton({double size = 46}) {
+    return FilledButton(
+      onPressed: _busy ? null : _sendMessage,
+      style: FilledButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: Size(size, size),
+        fixedSize: Size(size, size),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(size * 0.35),
+        ),
+      ),
+      child: Icon(
+        _busy ? Icons.hourglass_top_rounded : Icons.arrow_upward_rounded,
+        size: size * 0.48,
       ),
     );
   }
