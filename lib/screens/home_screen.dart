@@ -740,19 +740,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         key: _scaffoldKey,
         drawer: _buildHistoryDrawer(theme),
         backgroundColor: backgroundColor,
-        body: SafeArea(
-          child: Column(
-            children: [
-              _buildTopBar(theme),
-              if (_error != null) _buildErrorBanner(theme),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  child: _buildChatPane(theme),
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.translucent,
+          child: SafeArea(
+            child: Column(
+              children: [
+                _buildTopBar(theme),
+                if (_error != null) _buildErrorBanner(theme),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: _buildChatPane(theme),
+                  ),
                 ),
-              ),
-              _buildComposer(theme),
-            ],
+                _buildComposer(theme),
+              ],
+            ),
           ),
         ),
       ),
@@ -994,6 +998,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             color: isDark ? const Color(0xFF111111) : const Color(0xFFFFF3F7),
           ),
           child: ListView.builder(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             controller: _messagesController,
             padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
             itemCount:
