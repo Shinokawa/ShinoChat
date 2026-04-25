@@ -1,0 +1,112 @@
+name: Build & Release (Modular)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  Gatekeeper:
+    name: Check Release Trigger
+    runs-on: ubuntu-latest
+    outputs:
+      triggered: ${{ steps.check.outputs.triggered }}
+      release_title: ${{ steps.check.outputs.release_title }}
+    steps:
+      - name: Check commit message for release trigger
+        id: check
+        shell: bash
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            echo "Manual dispatch detected. Enable release publish."
+            echo "triggered=true" >> "$GITHUB_OUTPUT"
+            echo "release_title=manual-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${COMMIT_MSG:-}" =~ ([0-9]{4}\.[0-9]{4}) ]]; then
+            echo "Release trigger found in commit message."
+            echo "triggered=true" >> "$GITHUB_OUTPUT"
+            echo "release_title=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release trigger found. Build artifacts only."
+            echo "triggered=false" >> "$GITHUB_OUTPUT"
+            echo "release_title=" >> "$GITHUB_OUTPUT"
+          fi
+
+  Build-Android:
+    name: Build Android
+    uses: ./.github/workflows/build-android.yml
+    secrets:
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+      ALIAS: ${{ secrets.ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+  Build-iOS:
+    name: Build iOS
+    uses: ./.github/workflows/build-ios.yml
+
+  Publish:
+    name: Publish GitHub Release
+    needs:
+      - Gatekeeper
+      - Build-Android
+      - Build-iOS
+    if: needs.Gatekeeper.outputs.triggered == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/artifacts
+
+      - name: List artifacts
+        run: ls -R /tmp/artifacts
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.Build-Android.outputs.version }}"
+          {
+            echo "## ShinoChat v${VERSION}"
+            echo
+            echo "Automated release built by GitHub Actions."
+            echo
+            echo "### Included artifacts"
+            echo "- Android APK"
+            echo "- iOS unsigned IPA"
+            echo
+            echo "### Recent commits"
+            git log -n 20 --pretty='- %s (%h)'
+          } > release_notes.md
+
+      - name: Upload to release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ needs.Build-Android.outputs.version }}
+          name: Release v${{ needs.Build-Android.outputs.version }}
+          bodyFile: release_notes.md
+          allowUpdates: true
+          replacesArtifacts: true
+          artifactErrorsFailBuild: true
+          artifacts: /tmp/artifacts/release-android/*.apk,/tmp/artifacts/release-ios/*.ipa
+          token: ${{ secrets.GITHUB_TOKEN }}

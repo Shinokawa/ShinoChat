@@ -1,0 +1,64 @@
+name: Build iOS
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: App version name
+        value: ${{ jobs.build.outputs.version }}
+      artifact-name:
+        description: Artifact name
+        value: ${{ jobs.build.outputs.artifact-name }}
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build iOS IPA (unsigned)
+    runs-on: macos-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      artifact-name: release-ios
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve app version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          VERSION_NAME="${RAW_VERSION%%+*}"
+          echo "version=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS app without signing
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/ios/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/Runner.app
+          pushd build/ios/ipa
+          zip -r ShinoChat-unsigned.ipa Payload
+          popd
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-ios
+          path: build/ios/ipa/ShinoChat-unsigned.ipa
+          if-no-files-found: error
